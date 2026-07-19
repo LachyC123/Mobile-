@@ -1,0 +1,346 @@
+/* RUSHLINE — pixel UI design system.
+   Rules: square corners only, 4px borders, bevel shadows, no glass, no gradients-as-decoration. */
+
+:root {
+  --ink: #0e1420;
+  --panel: #1a2338;
+  --panel-light: #263352;
+  --panel-edge: #3b4f7a;
+  --txt: #f2f6ff;
+  --txt-dim: #93a3c4;
+  --gold: #ffd23f;
+  --teal: #29d3b5;
+  --danger: #ff4d4d;
+  --interact: #6ef3ff;
+}
+
+#root {
+  height: 100%;
+}
+
+/* ── panels ───────────────────────────────────────────────────── */
+.px-panel {
+  background: var(--panel);
+  border: 4px solid var(--ink);
+  box-shadow: inset 0 0 0 2px var(--panel-edge), 0 6px 0 rgba(0, 0, 0, 0.35);
+  border-radius: 0;
+}
+
+.px-panel-inset {
+  background: var(--ink);
+  border: 3px solid var(--panel-edge);
+  box-shadow: inset 0 3px 0 rgba(0, 0, 0, 0.5);
+}
+
+/* ── buttons ──────────────────────────────────────────────────── */
+.px-btn {
+  font-family: "Press Start 2P", monospace;
+  background: var(--panel-light);
+  color: var(--txt);
+  border: 4px solid var(--ink);
+  box-shadow: inset 0 0 0 2px var(--panel-edge), 0 5px 0 var(--ink);
+  padding: 14px 18px;
+  font-size: 12px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  text-align: center;
+  transition: transform 0.05s, box-shadow 0.05s, filter 0.1s;
+  image-rendering: pixelated;
+}
+
+.px-btn:hover {
+  filter: brightness(1.15);
+}
+
+.px-btn:active {
+  transform: translateY(5px);
+  box-shadow: inset 0 0 0 2px var(--panel-edge), 0 0 0 var(--ink);
+}
+
+.px-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+  filter: grayscale(0.6);
+}
+
+.px-btn:disabled:active {
+  transform: none;
+  box-shadow: inset 0 0 0 2px var(--panel-edge), 0 5px 0 var(--ink);
+}
+
+.px-btn-gold {
+  background: var(--gold);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 2px #fff2c0, 0 5px 0 #8a6d1c;
+  border-color: #4a3a08;
+}
+
+.px-btn-gold:active {
+  box-shadow: inset 0 0 0 2px #fff2c0, 0 0 0 #8a6d1c;
+}
+
+.px-btn-teal {
+  background: var(--teal);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 2px #b6f5e8, 0 5px 0 #13614f;
+  border-color: #0a3a30;
+}
+
+.px-btn-teal:active {
+  box-shadow: inset 0 0 0 2px #b6f5e8, 0 0 0 #13614f;
+}
+
+.px-btn-danger {
+  background: var(--danger);
+  color: #fff;
+  box-shadow: inset 0 0 0 2px #ffb3b3, 0 5px 0 #7a1622;
+  border-color: #4a0d14;
+}
+
+.px-btn-danger:active {
+  box-shadow: inset 0 0 0 2px #ffb3b3, 0 0 0 #7a1622;
+}
+
+/* ── text ─────────────────────────────────────────────────────── */
+.px-title {
+  color: var(--gold);
+  text-shadow: 0 4px 0 var(--ink), 4px 0 0 var(--ink), -4px 0 0 var(--ink), 0 -4px 0 var(--ink),
+    4px 4px 0 var(--ink);
+}
+
+.px-shadow {
+  text-shadow: 2px 2px 0 var(--ink);
+}
+
+.txt-dim {
+  color: var(--txt-dim);
+}
+
+/* ── meters ───────────────────────────────────────────────────── */
+.px-meter {
+  height: 16px;
+  background: var(--ink);
+  border: 3px solid var(--ink);
+  box-shadow: inset 0 0 0 2px var(--panel-edge);
+  position: relative;
+  overflow: hidden;
+}
+
+.px-meter > .fill {
+  height: 100%;
+  transition: width 0.35s steps(8);
+  background: repeating-linear-gradient(90deg, var(--teal) 0 8px, #1fae94 8px 10px);
+}
+
+.px-meter.flow > .fill {
+  background: repeating-linear-gradient(90deg, var(--gold) 0 8px, #d9a821 8px 10px);
+}
+
+.px-meter.flow.full > .fill {
+  animation: flowPulse 0.6s steps(2) infinite;
+}
+
+@keyframes flowPulse {
+  0% { filter: brightness(1); }
+  100% { filter: brightness(1.5); }
+}
+
+/* AP pips */
+.ap-pip {
+  width: 18px;
+  height: 18px;
+  background: var(--ink);
+  border: 3px solid var(--panel-edge);
+  display: inline-block;
+}
+
+.ap-pip.on {
+  background: var(--interact);
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 2px #d2fbff, 0 0 8px rgba(110, 243, 255, 0.55);
+}
+
+.ap-pip.spent {
+  background: #232c44;
+}
+
+/* ── scoreboard chips ─────────────────────────────────────────── */
+.score-chip {
+  background: var(--ink);
+  border: 3px solid var(--panel-edge);
+  padding: 6px 10px;
+  font-size: 16px;
+  color: var(--gold);
+  text-shadow: 2px 2px 0 #000;
+}
+
+.hud-chip {
+  background: rgba(14, 20, 32, 0.92);
+  border: 3px solid var(--panel-edge);
+  padding: 7px 10px;
+  font-size: 9px;
+}
+
+/* ── animations ───────────────────────────────────────────────── */
+@keyframes popIn {
+  0% { transform: scale(0.4); opacity: 0; }
+  70% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.anim-pop {
+  animation: popIn 0.35s steps(6) both;
+}
+
+@keyframes floatY {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.anim-float {
+  animation: floatY 3s steps(12) infinite;
+}
+
+@keyframes blinkHard {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.25; }
+}
+
+.anim-blink {
+  animation: blinkHard 0.9s steps(1) infinite;
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes loadStripe {
+  0% { background-position: 0 0; }
+  100% { background-position: 28px 0; }
+}
+
+.px-loadingbar {
+  height: 22px;
+  border: 4px solid var(--ink);
+  box-shadow: inset 0 0 0 2px var(--panel-edge);
+  background: var(--ink);
+  overflow: hidden;
+}
+
+.px-loadingbar > .fill {
+  height: 100%;
+  background: repeating-linear-gradient(45deg, var(--teal) 0 10px, #1fae94 10px 20px);
+  animation: loadStripe 0.5s linear infinite;
+  transition: width 0.3s steps(10);
+}
+
+/* LP delta flash */
+@keyframes lpGain {
+  0% { color: var(--gold); transform: scale(1); }
+  50% { color: #7dff8a; transform: scale(1.3); }
+  100% { color: var(--gold); transform: scale(1); }
+}
+
+/* coach bubble */
+.coach-bubble {
+  position: relative;
+}
+
+.coach-bubble::after {
+  content: "";
+  position: absolute;
+  left: 34px;
+  top: -12px;
+  width: 16px;
+  height: 16px;
+  background: var(--panel);
+  border-left: 4px solid var(--ink);
+  border-top: 4px solid var(--ink);
+  transform: rotate(45deg);
+  box-shadow: -2px -2px 0 0 var(--panel-edge);
+}
+
+/* toggle switch */
+.px-toggle {
+  width: 56px;
+  height: 28px;
+  background: var(--ink);
+  border: 3px solid var(--panel-edge);
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.px-toggle::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background: var(--txt-dim);
+  transition: left 0.12s steps(3), background 0.12s;
+}
+
+.px-toggle.on::after {
+  left: 30px;
+  background: var(--teal);
+}
+
+/* range slider */
+input[type="range"].px-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 14px;
+  background: var(--ink);
+  border: 3px solid var(--panel-edge);
+  outline: none;
+}
+
+input[type="range"].px-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  background: var(--gold);
+  border: 3px solid var(--ink);
+  cursor: pointer;
+}
+
+input[type="range"].px-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background: var(--gold);
+  border: 3px solid var(--ink);
+  cursor: pointer;
+  border-radius: 0;
+}
+
+/* division shield */
+.div-shield {
+  width: 72px;
+  height: 78px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* misc */
+.crt-lines {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.09) 0 2px, transparent 2px 4px);
+  mix-blend-mode: multiply;
+  z-index: 5;
+}
+
+.safe-top {
+  padding-top: max(10px, env(safe-area-inset-top));
+}
+
+.safe-bottom {
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+}
