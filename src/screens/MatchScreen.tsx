@@ -68,16 +68,38 @@ export function MatchScreen({ mode, division, botClub, seed, settings, onSetting
     const ro = new ResizeObserver(() => ctl.resize());
     ro.observe(wrapRef.current!);
     const onVis = () => {
-      if (document.hidden) audio.setMusic('off');
-      else audio.setMusic('match');
+      if (document.hidden) {
+        audio.setMusic('off');
+        audio.suspend(); // silence the crowd bed too, not just the sequencer
+      } else {
+        audio.resume();
+        audio.setMusic('match');
+      }
     };
     document.addEventListener('visibilitychange', onVis);
 
+    // desktop niceties: Space/Enter ends the play, Esc deselects, U undoes
+    const onKey = (e: KeyboardEvent) => {
+      const c = ctlRef.current;
+      if (!c) return;
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        c.endPlayRequested();
+      } else if (e.key === 'Escape') {
+        c.deselectRequested();
+      } else if (e.key === 'u' || e.key === 'U') {
+        c.undoRequested();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+
     return () => {
+      window.removeEventListener('keydown', onKey);
       document.removeEventListener('visibilitychange', onVis);
       ro.disconnect();
       ctl.destroy();
       ctlRef.current = null;
+      audio.resume();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, division.id, botClub.id, seed]);
@@ -178,6 +200,18 @@ export function MatchScreen({ mode, division, botClub, seed, settings, onSetting
             alt="Coach Pip"
             className="anim-float absolute -top-[76px] left-1 h-[72px] w-[72px] border-4 border-black bg-[#1a2338] shadow-[inset_0_0_0_2px_#3b4f7a]"
           />
+        </div>
+      )}
+
+      {/* ── UNDO ── */}
+      {hud?.canUndo && !hud.coachLine && (
+        <div className="absolute bottom-0 left-0 z-10 p-3 safe-bottom">
+          <button
+            className="px-btn text-[10px]"
+            onClick={() => ctlRef.current?.undoRequested()}
+          >
+            ↩ UNDO
+          </button>
         </div>
       )}
 

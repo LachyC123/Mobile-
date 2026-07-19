@@ -2,7 +2,7 @@
 // animation/vfx/audio → touch input. React HUD talks to this via snapshots.
 
 import {
-  BASE_AP, CLASSES, COLS, ROWS, type ClubDef, type DivisionDef, LOADING_TIPS,
+  BASE_AP, CLASSES, COLS, FLOW_MAX, ROWS, type ClubDef, type DivisionDef, LOADING_TIPS,
 } from './constants';
 import { PAL } from './palette';
 import { Rng } from './rng';
@@ -21,10 +21,18 @@ import type { TutorialRunner } from './tutorial';
 export type MatchMode = 'ranked' | 'quick' | 'tutorial';
 type FlowState = 'kickoff' | 'player' | 'bot' | 'ceremony' | 'over';
 
+/** Per-team tallies, index 0 = player, 1 = bot. */
+export interface MatchStats {
+  passes: [number, number];
+  interceptions: [number, number];
+  shoves: [number, number];
+}
+
 export interface MatchResult {
   winner: Team;
   score: [number, number];
   playerWon: boolean;
+  stats: MatchStats | null;
 }
 
 export interface HudSnapshot {
@@ -41,6 +49,7 @@ export interface HudSnapshot {
   selectedLabel: string | null;
   canAct: boolean;
   canEndPlay: boolean;
+  canUndo: boolean;
   coachLine: string | null;
   coachContinue: boolean;
   botClubName: string;
@@ -103,6 +112,11 @@ export class MatchController {
   private tip: string;
   private onPointer: (e: PointerEvent) => void;
   private surgeShownFor: [boolean, boolean] = [false, false];
+  private stats: MatchStats = { passes: [0, 0], interceptions: [0, 0], shoves: [0, 0] };
+  private playerApMax = BASE_AP;
+  private goldenGoalShown = false;
+  // one-level undo: snapshot taken before each player action, cleared on turnovers/goals
+  private undoSnap: { state: MatchState; rngState: number; stats: MatchStats } | null = null;
 
   constructor(opts: ControllerOpts) {
     this.opts = opts;
@@ -168,8 +182,26 @@ export class MatchController {
   endPlayRequested() {
     if (this.flow !== 'player') return;
     if (this.opts.tutorial && !this.opts.tutorial.allowEndPlay()) return;
+    this.undoSnap = null;
     this.deselect();
     this.finishPlayerPlay();
+  }
+
+  deselectRequested() {
+    if (this.flow === 'player') this.deselect();
+  }
+
+  /** Rewind the last player action (blocked once it revealed a turnover or goal). */
+  undoRequested() {
+    if (this.flow !== 'player' || !this.undoSnap || this.opts.tutorial) return;
+    this.state = this.undoSnap.state;
+    this.rng.setState(this.undoSnap.rngState);
+    this.stats = this.undoSnap.stats;
+    this.undoSnap = null;
+    this.anims = [];
+    this.refreshFromState();
+    audio.sfx('ui');
+    haptic(this.opts.getSettings(), 10);
   }
 
   coachContinueRequested() {
@@ -379,24 +411,41 @@ export class MatchController {
   // ── actions (rules → events → animation/feedback) ─────────────
 
   private doMove(id: string, x: number, y: number) {
+    this.takeUndoSnapshot();
     const events = applyMove(this.state, id, x, y, this.rng);
     this.handleEvents(events);
-    this.afterPlayerAction();
+    this.afterPlayerAction(events);
   }
 
   private doPass(id: string, targetId: string) {
+    this.takeUndoSnapshot();
     const events = applyPass(this.state, id, targetId, this.rng);
     this.handleEvents(events);
-    this.afterPlayerAction();
+    this.afterPlayerAction(events);
   }
 
   private doShove(id: string, targetId: string) {
+    this.takeUndoSnapshot();
     const events = applyShove(this.state, id, targetId, this.rng);
     this.handleEvents(events);
-    this.afterPlayerAction();
+    this.afterPlayerAction(events);
   }
 
-  private afterPlayerAction() {
+  private takeUndoSnapshot() {
+    if (this.opts.tutorial) return;
+    this.undoSnap = {
+      state: structuredClone(this.state),
+      rngState: this.rng.getState(),
+      stats: structuredClone(this.stats),
+    };
+  }
+
+  private afterPlayerAction(events: GameEvent[]) {
+    // undo would leak information (or rewind score) once any of these happened
+    if (events.some((e) => e.type === 'goal' || e.type === 'matchOver' || e.type === 'invalid'
+        || (e.type === 'pass' && e.interceptedById) || (e.type === 'shove' && e.ballLooseAt))) {
+      this.undoSnap = null;
+    }
     this.selectedId = null;
     this.actions = null;
     this.armedPass = null;
@@ -414,6 +463,7 @@ export class MatchController {
   }
 
   private finishPlayerPlay() {
+    this.undoSnap = null;
     const events = rulesEndPlay(this.state);
     this.handleEvents(events);
     if (this.state.phase !== 'over' && this.flow !== 'ceremony') this.beginPlayerOrBot();
@@ -427,12 +477,19 @@ export class MatchController {
       switch (ev.type) {
         case 'move': this.animMove(ev.athleteId, ev.path); break;
         case 'pickup': this.fbPickup(ev.athleteId); break;
-        case 'pass': this.animPass(ev); break;
-        case 'shove': this.animShove(ev); break;
+        case 'pass':
+          if (ev.interceptedById) this.stats.interceptions[getAthlete(this.state, ev.interceptedById).team]++;
+          else this.stats.passes[getAthlete(this.state, ev.fromId).team]++;
+          this.animPass(ev);
+          break;
+        case 'shove':
+          this.stats.shoves[getAthlete(this.state, ev.shoverId).team]++;
+          this.animShove(ev);
+          break;
         case 'goal': this.fbGoal(ev.team, ev.scorerId); break;
         case 'flow': this.fbFlow(ev.team, ev.surgeReady); break;
         case 'playEnd': break;
-        case 'playStart': this.fbPlayStart(ev.team, ev.ap); break;
+        case 'playStart': this.fbPlayStart(ev.team, ev.ap, ev.suddenDeath); break;
         case 'matchOver': this.fbMatchOver(ev.winner); break;
         case 'invalid': audio.sfx('error'); break;
       }
@@ -667,12 +724,24 @@ export class MatchController {
     this.vfx.flash(PAL.reward, 0.15);
   }
 
-  private fbPlayStart(team: Team, ap: number) {
+  private fbPlayStart(team: Team, ap: number, suddenDeath: boolean) {
     this.surgeShownFor[team] = false;
     if (team === 0) {
+      this.playerApMax = ap; // HUD pips match a surge play's 5 AP
       this.vfx.popup(tileCenter(3, ROWS - 3).wx, tileCenter(3, ROWS - 3).wy, `YOUR PLAY — ${ap} AP`, PAL.interact, 0.9);
+      const left = this.state.playLimit > 0 ? this.state.playLimit - this.state.playsUsed[0] : 0;
+      if (!suddenDeath && left === 1) {
+        this.vfx.popup(tileCenter(3, 5).wx, tileCenter(3, 5).wy, 'FINAL PLAY!', PAL.danger, 1.1);
+        audio.sfx('countdown');
+      }
     }
-    void ap;
+    if (suddenDeath && !this.goldenGoalShown) {
+      this.goldenGoalShown = true;
+      this.vfx.showBanner('GOLDEN GOAL', { sub: 'next goal wins the match', color: PAL.reward, tier: 'large' });
+      this.vfx.flash(PAL.reward, 0.2);
+      audio.sfx('surge');
+      audio.crowdSwell(0.6, 2.5);
+    }
   }
 
   private fbMatchOver(winner: Team) {
@@ -680,7 +749,16 @@ export class MatchController {
     const playerWon = winner === 0;
     this.schedule(1.2, () => {
       audio.sfx(playerWon ? 'win' : 'lose');
-      this.opts.onMatchEnd({ winner, score: [...this.state.score], playerWon });
+      this.opts.onMatchEnd({
+        winner,
+        score: [...this.state.score],
+        playerWon,
+        stats: {
+          passes: [...this.stats.passes],
+          interceptions: [...this.stats.interceptions],
+          shoves: [...this.stats.shoves],
+        },
+      });
     });
   }
 
@@ -750,6 +828,7 @@ export class MatchController {
   }
 
   private update(dt: number) {
+    this.vfx.reducedShake = this.opts.getSettings().reducedShake;
     const timeScale = this.vfx.update(dt);
     const gdt = dt * timeScale;
     this.clock += gdt;
@@ -802,14 +881,16 @@ export class MatchController {
 
   private buildView(): SceneView {
     const selAthlete = this.selectedId ? getAthlete(this.state, this.selectedId) : null;
-    const pathPreview: Tile[] = [];
-    void pathPreview;
+    // pass lanes for the selected carrier — gold when safe, red when a rival can steal
+    const lanes = this.actions
+      ? this.actions.passes.map((p) => ({ tiles: p.tiles, risky: !!p.interceptedById }))
+      : [];
     return {
       athletes: [...this.viewAthletes.values()],
       ball: this.viewBall,
       hl: {
         moves: this.actions ? this.actions.moves : [],
-        pathPreview,
+        lanes,
         selectedTile: selAthlete ? { x: selAthlete.x, y: selAthlete.y } : null,
         actedTiles: this.state.athletes.filter((a) => a.acted && a.team === this.state.activeTeam),
       },
@@ -827,9 +908,9 @@ export class MatchController {
       flow: this.flow,
       score: [...this.state.score],
       ap: this.state.ap,
-      apMax: this.state.surge[0] ? BASE_AP + 1 : BASE_AP,
+      apMax: this.playerApMax,
       flowMeter: this.state.flow[0],
-      flowMax: 6,
+      flowMax: FLOW_MAX,
       surgeArmed: this.state.surge[0],
       playsLeft: this.state.playLimit > 0 ? Math.max(0, this.state.playLimit - this.state.playsUsed[0]) : 0,
       suddenDeath: this.state.suddenDeath,
@@ -837,6 +918,7 @@ export class MatchController {
       selectedLabel: selAth ? `${CLASSES[selAth.cls].name}${selAth.hasBall ? ' · ON THE CORE' : ''}` : null,
       canAct: this.flow === 'player',
       canEndPlay: tut ? tut.allowEndPlay() : this.flow === 'player',
+      canUndo: this.flow === 'player' && !!this.undoSnap && !tut,
       coachLine: this.coachLine,
       coachContinue: this.coachContinue,
       botClubName: this.opts.botClub.name,

@@ -3,12 +3,14 @@ import { CrowdBackdrop } from '@/components/CrowdBackdrop';
 import { crestDataURL } from '@/game/sprites';
 import { DIVISIONS, PLAYER_CLUB, type ClubDef } from '@/game/constants';
 import type { SaveData } from '@/game/save';
+import type { MatchStats } from '@/game/matchController';
 import { audio } from '@/game/audio';
 
 export interface RankDelta {
   before: SaveData['rank'];
   after: SaveData['rank'];
   lpDelta: number;
+  streakBonus: number;
   promoted: boolean;
   demoted: boolean;
 }
@@ -16,6 +18,7 @@ export interface RankDelta {
 interface Props {
   playerWon: boolean;
   score: [number, number];
+  stats: MatchStats | null;
   botClub: ClubDef;
   ranked: boolean;
   rankDelta: RankDelta | null;
@@ -24,7 +27,7 @@ interface Props {
   onContinue: () => void;
 }
 
-export function ResultsScreen({ playerWon, score, botClub, ranked, rankDelta, tutorial, onRematch, onContinue }: Props) {
+export function ResultsScreen({ playerWon, score, stats, botClub, ranked, rankDelta, tutorial, onRematch, onContinue }: Props) {
   const [shownLp, setShownLp] = useState(rankDelta?.before.lp ?? 0);
   const promoted = rankDelta?.promoted ?? false;
   const demoted = rankDelta?.demoted ?? false;
@@ -89,6 +92,38 @@ export function ResultsScreen({ playerWon, score, botClub, ranked, rankDelta, tu
             </div>
           )}
 
+          {stats && !tutorial && (
+            <div className="px-panel-inset w-full p-3">
+              <div className="mb-2 text-center text-[7px] txt-dim">MATCH STATS · YOU vs RIVAL</div>
+              <div className="flex justify-around text-[8px]">
+                <div className="flex flex-col items-center gap-1">
+                  <span className="txt-dim">PASSES</span>
+                  <span>
+                    <span className="text-[#29d3b5]">{stats.passes[0]}</span>
+                    <span className="txt-dim"> — </span>
+                    <span style={{ color: botClub.primary }}>{stats.passes[1]}</span>
+                  </span>
+                </div>
+                <div className="flex flex-col items-center gap-1">
+                  <span className="txt-dim">STEALS</span>
+                  <span>
+                    <span className="text-[#29d3b5]">{stats.interceptions[0]}</span>
+                    <span className="txt-dim"> — </span>
+                    <span style={{ color: botClub.primary }}>{stats.interceptions[1]}</span>
+                  </span>
+                </div>
+                <div className="flex flex-col items-center gap-1">
+                  <span className="txt-dim">SHOVES</span>
+                  <span>
+                    <span className="text-[#29d3b5]">{stats.shoves[0]}</span>
+                    <span className="txt-dim"> — </span>
+                    <span style={{ color: botClub.primary }}>{stats.shoves[1]}</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {ranked && rankDelta && divBefore && divAfter && (
             <div className="px-panel w-full p-4">
               <div className="mb-2 flex items-center justify-between">
@@ -112,6 +147,12 @@ export function ResultsScreen({ playerWon, score, botClub, ranked, rankDelta, tu
                 />
               </div>
               <div className="mt-1 text-right text-[8px] txt-dim">{shownLp} / 100 LP</div>
+
+              {rankDelta.streakBonus > 0 && (
+                <div className="mt-2 text-center text-[8px] text-[#ffd23f]">
+                  ▲ {rankDelta.after.streak}-WIN STREAK · +{rankDelta.streakBonus} BONUS LP
+                </div>
+              )}
 
               {promoted && (
                 <div className="anim-pop mt-3 border-4 border-black bg-[#ffd23f] p-3 text-center text-[10px] text-black">

@@ -74,6 +74,15 @@ class AudioEngine {
     return this.started;
   }
 
+  /** Pause all sound (crowd bed included) when the tab is hidden. */
+  suspend() {
+    if (this.started && this.ctx && this.ctx.state === 'running') void this.ctx.suspend();
+  }
+
+  resume() {
+    if (this.started && this.ctx && this.ctx.state === 'suspended') void this.ctx.resume();
+  }
+
   // ── crowd bed ────────────────────────────────────────────────
   private startCrowd() {
     const ctx = this.ctx!;

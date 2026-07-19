@@ -12,7 +12,7 @@ import {
 } from '@/game/constants';
 import { loadSave, persist, type SaveData } from '@/game/save';
 import { audio } from '@/game/audio';
-import type { MatchResult } from '@/game/matchController';
+import type { MatchResult, MatchStats } from '@/game/matchController';
 
 type Screen = 'title' | 'ladder' | 'loading' | 'match' | 'results';
 
@@ -26,10 +26,14 @@ interface MatchCfg {
 interface ResultBundle {
   playerWon: boolean;
   score: [number, number];
+  stats: MatchStats | null;
   rankDelta: RankDelta | null;
   tutorial: boolean;
   ranked: boolean;
 }
+
+const STREAK_FOR_BONUS = 3;
+const LP_STREAK_BONUS = 6;
 
 function pickClub(division: DivisionDef, seed: number): ClubDef {
   return division.clubs[seed % division.clubs.length];
@@ -42,10 +46,12 @@ function applyResult(save: SaveData, playerWon: boolean): RankDelta {
   const divIdx = r.division;
 
   let delta: number;
+  let streakBonus = 0;
   if (playerWon) {
-    delta = LP_WIN;
     r.wins++;
     r.streak = Math.max(1, r.streak + 1);
+    if (r.streak >= STREAK_FOR_BONUS) streakBonus = LP_STREAK_BONUS;
+    delta = LP_WIN + streakBonus;
   } else {
     delta = divIdx === 0 ? LP_LOSS_ROOKIE : LP_LOSS;
     r.losses++;
@@ -72,7 +78,7 @@ function applyResult(save: SaveData, playerWon: boolean): RankDelta {
     }
   }
   r.bestDivision = Math.max(r.bestDivision, r.division);
-  return { before, after: { ...r }, lpDelta: delta, promoted, demoted };
+  return { before, after: { ...r }, lpDelta: delta, streakBonus, promoted, demoted };
 }
 
 export default function App() {
@@ -114,39 +120,34 @@ export default function App() {
   }, []);
 
   const handleFinish = useCallback((r: MatchResult) => {
-    setCfg((current) => {
-      const isRanked = current?.mode === 'ranked';
-      const isTutorial = current?.mode === 'tutorial';
-      let rankDelta: RankDelta | null = null;
-      setSave((prev) => {
-        const next: SaveData = {
-          ...prev,
-          rank: { ...prev.rank },
-          tutorialDone: prev.tutorialDone || isTutorial,
-        };
-        if (isRanked) {
-          rankDelta = applyResult(next, r.playerWon);
-        }
-        return next;
-      });
-      // rankDelta is set synchronously inside setSave's updater in React 18 (updater runs during setState)
-      setResult({
-        playerWon: r.playerWon,
-        score: r.score,
-        rankDelta,
-        tutorial: isTutorial ?? false,
-        ranked: isRanked ?? false,
-      });
-      return current;
+    const current = cfgRef.current;
+    const isRanked = current?.mode === 'ranked';
+    const isTutorial = current?.mode === 'tutorial';
+    // Rank math runs here, once, on a copy — never inside a setState updater,
+    // where StrictMode's double-invoke would apply the LP change twice.
+    const next: SaveData = {
+      ...saveRef.current,
+      rank: { ...saveRef.current.rank },
+      tutorialDone: saveRef.current.tutorialDone || isTutorial,
+    };
+    const rankDelta = isRanked ? applyResult(next, r.playerWon) : null;
+    setSave(next);
+    setResult({
+      playerWon: r.playerWon,
+      score: r.score,
+      stats: r.stats,
+      rankDelta,
+      tutorial: isTutorial,
+      ranked: isRanked,
     });
     setScreen('results');
   }, []);
 
   const handleForfeit = useCallback(() => {
     if (cfg?.mode === 'ranked') {
-      handleFinish({ winner: 1, score: [0, 1], playerWon: false });
+      handleFinish({ winner: 1, score: [0, 1], playerWon: false, stats: null });
     } else {
-      setScreen(cfg?.mode === 'tutorial' ? 'title' : 'title');
+      setScreen('title');
     }
   }, [cfg, handleFinish]);
 
@@ -192,6 +193,7 @@ export default function App() {
         <ResultsScreen
           playerWon={result.playerWon}
           score={result.score}
+          stats={result.stats}
           botClub={cfg.botClub}
           ranked={result.ranked}
           rankDelta={result.rankDelta}

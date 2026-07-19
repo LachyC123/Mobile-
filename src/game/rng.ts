@@ -21,4 +21,11 @@ export class Rng {
   chance(p: number): boolean {
     return this.next() < p;
   }
+  /** Snapshot/restore internal state — powers undo without breaking determinism. */
+  getState(): number {
+    return this.s;
+  }
+  setState(s: number) {
+    this.s = s >>> 0;
+  }
 }

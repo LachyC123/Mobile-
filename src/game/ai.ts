@@ -1,7 +1,7 @@
 // RUSHLINE bot — utility AI. Chooses one action at a time, re-evaluating
 // after each, until AP runs out or nothing scores positively.
 
-import { CLASSES, COLS, ROWS } from './constants';
+import { CLASSES, ROWS } from './constants';
 import type { DivisionDef } from './constants';
 import {
   legalActions, applyMove, applyPass, applyShove, carrier, goalRowFor,
@@ -57,7 +57,12 @@ function evaluate(state: MatchState, team: Team, div: DivisionDef, rng: Rng): Bo
       const target = state.athletes.find((t) => t.id === s.targetId)!;
       let sc = 2;
       if (target.hasBall) sc += 14; // popping the core loose is huge
-      if (s.pushTo && s.pushTo.y === goalRowFor(target.team) && target.hasBall) sc += 4;
+      if (s.pushTo && target.hasBall) {
+        // knocking the carrier backward is worth more than a sideways bump
+        const backward = target.team === 0 ? s.pushTo.y > target.y : s.pushTo.y < target.y;
+        if (backward) sc += 2;
+        if (s.pushTo.y === goalRowFor(target.team)) sc -= 3; // don't pop the core loose on their goal line
+      }
       if (!s.pushTo && !target.hasBall) sc -= 1.5; // shoving into boards for nothing
       cands.push({ kind: 'shove', athleteId: a.id, targetId: s.targetId, score: sc });
     }
@@ -74,6 +79,8 @@ function evaluate(state: MatchState, team: Team, div: DivisionDef, rng: Rng): Bo
       let sc = 3;
       sc += (progressOf(team, mate.y) - progressOf(team, a.y)) * 10; // forward is good
       if (mate.y === goalRow) sc += 60; // pass that scores
+      // pass that sets up a score: receiver hasn't acted and can run it in
+      if (!mate.acted && Math.abs(mate.y - goalRow) <= CLASSES[mate.cls].spd && state.ap >= 2) sc += 8;
       sc -= dangerAt(state, team, mate) * 1.2; // into traffic is bad
       if (dist(mate, { x: 3, y: goalRow }) < dist(a, { x: 3, y: goalRow })) sc += 2;
       // backward safety pass when carrier is about to get shoved
@@ -91,6 +98,10 @@ function evaluate(state: MatchState, team: Team, div: DivisionDef, rng: Rng): Bo
         if (m.y === goalRow) sc += 100; // SCORE
         sc += (progressOf(team, m.y) - progressOf(team, a.y)) * 8;
         sc -= dangerAt(state, team, m) * (div.avoidsRisk ? 2.4 : 1.4);
+        // an adjacent enemy Guard means a shove next play — sharp bots respect it
+        for (const e of enemiesOf(state, team)) {
+          if (e.cls === 'GUARD' && dist(e, m) === 1) sc -= div.avoidsRisk ? 4 : 1.5;
+        }
         // keep central lanes
         sc -= Math.abs(m.x - 3) * 0.3;
       } else if (ballCarrier && ballCarrier.team !== team) {
@@ -140,6 +151,3 @@ export function botStep(state: MatchState, team: Team, div: DivisionDef, rng: Rn
   else events = applyShove(state, action.athleteId, action.targetId!, rng);
   return { events, action };
 }
-
-// Columns used for tiny heuristics above
-void COLS;

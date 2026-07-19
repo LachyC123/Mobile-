@@ -47,9 +47,14 @@ export interface ViewBall {
   spin: number;
 }
 
+export interface PassLane {
+  tiles: Tile[]; // full lane, endpoints included
+  risky: boolean; // a rival can steal this pass
+}
+
 export interface HighlightState {
   moves: Tile[];
-  pathPreview: Tile[];
+  lanes: PassLane[];
   selectedTile: Tile | null;
   actedTiles: Tile[];
 }
@@ -471,12 +476,23 @@ export class Renderer {
       c.fillRect(wx + 2, wy - 3, 6, 6);
     }
 
-    // path preview
-    if (view.hl.pathPreview.length) {
-      c.fillStyle = 'rgba(110,243,255,0.85)';
-      for (const p of view.hl.pathPreview) {
-        const { wx, wy } = tileCenter(p.x, p.y);
-        c.fillRect(wx - 3, wy - 3, 6, 6);
+    // pass lanes — dotted line from carrier to each receiver, colored by risk
+    for (const lane of view.hl.lanes) {
+      const risky = lane.risky;
+      const pulse = risky ? 0.45 + Math.sin(t * 8) * 0.25 : 0.55;
+      c.fillStyle = risky ? `rgba(255,77,77,${pulse})` : `rgba(255,210,63,${pulse})`;
+      for (let i = 0; i < lane.tiles.length; i++) {
+        const { wx, wy } = tileCenter(lane.tiles[i].x, lane.tiles[i].y);
+        if (i === 0) continue; // carrier tile stays clean
+        if (i === lane.tiles.length - 1) {
+          // chunky ring on the receiver's tile
+          c.fillRect(wx - 7, wy - 7, 14, 3);
+          c.fillRect(wx - 7, wy + 4, 14, 3);
+          c.fillRect(wx - 7, wy - 7, 3, 14);
+          c.fillRect(wx + 4, wy - 7, 3, 14);
+        } else {
+          c.fillRect(wx - 3, wy - 3, 6, 6);
+        }
       }
     }
 
